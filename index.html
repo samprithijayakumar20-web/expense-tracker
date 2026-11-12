@@ -228,6 +228,49 @@
         <p>Lavender Wallet © 2026</p>
     </footer>
 
+<section class="panel report-panel">
+    <div class="section-heading">
+        <div>
+            <p class="eyebrow">MONTHLY ANALYSIS</p>
+            <h2>My Monthly Reports</h2>
+        </div>
+        <span class="heading-icon">✧</span>
+    </div>
+
+    <div class="report-controls">
+        <div>
+            <label for="reportMonth">Choose Month</label>
+            <input type="month" id="reportMonth">
+        </div>
+        <button type="button" class="primary-btn" id="downloadReport">
+            ↓ Download CSV Report
+        </button>
+    </div>
+
+    <div class="report-cards">
+        <div class="report-card">
+            <span>Monthly Income</span>
+            <h3 id="reportIncome">₹0.00</h3>
+        </div>
+
+        <div class="report-card">
+            <span>Monthly Expenses</span>
+            <h3 id="reportExpense">₹0.00</h3>
+        </div>
+
+        <div class="report-card">
+            <span>Monthly Savings</span>
+            <h3 id="reportSavings">₹0.00</h3>
+        </div>
+    </div>
+
+    <h3 class="category-title">Category-wise Expenses</h3>
+    <div id="categoryReport">
+        <p class="empty-message">No expenses for this month.</p>
+    </div>
+</section>
+
+
 </main>
 
 <script src="script.js"></script>

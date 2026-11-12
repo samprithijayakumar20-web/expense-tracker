@@ -472,3 +472,163 @@ currencySelect.addEventListener("change", function () {
 // ==========================================
 
 initializeApp();
+
+// ==========================================
+// MONTHLY REPORTS
+// ==========================================
+
+const reportMonth = document.getElementById("reportMonth");
+
+reportMonth.value = getCurrentMonth();
+
+function updateMonthlyReport() {
+    const selectedMonth = reportMonth.value;
+
+    const monthlyTransactions = transactions.filter(item =>
+        item.date.startsWith(selectedMonth)
+    );
+
+    let monthlyIncome = 0;
+    let monthlyExpense = 0;
+
+    const categoryTotals = {};
+
+    monthlyTransactions.forEach(item => {
+        const amount = Number(item.amount);
+
+        if (item.type === "income") {
+            monthlyIncome += amount;
+        } else {
+            monthlyExpense += amount;
+
+            categoryTotals[item.category] =
+                (categoryTotals[item.category] || 0) + amount;
+        }
+    });
+
+    const monthlySavings = monthlyIncome - monthlyExpense;
+
+    document.getElementById("reportIncome").textContent =
+        formatMoney(monthlyIncome);
+
+    document.getElementById("reportExpense").textContent =
+        formatMoney(monthlyExpense);
+
+    document.getElementById("reportSavings").textContent =
+        formatMoney(monthlySavings);
+
+    displayCategoryReport(categoryTotals);
+}
+
+// ==========================================
+// CATEGORY-WISE REPORT
+// ==========================================
+
+function displayCategoryReport(categoryTotals) {
+    const categoryReport = document.getElementById("categoryReport");
+
+    const categories = Object.entries(categoryTotals)
+        .sort((a, b) => b[1] - a[1]);
+
+    if (categories.length === 0) {
+        categoryReport.innerHTML = `
+            <p class="empty-message">
+                No expenses for this month.
+            </p>
+        `;
+        return;
+    }
+
+    categoryReport.innerHTML = categories.map(([category, amount]) => `
+        <div class="category-row">
+            <span>${escapeHTML(category)}</span>
+            <strong>${escapeHTML(formatMoney(amount))}</strong>
+        </div>
+    `).join("");
+}
+
+// ==========================================
+// DOWNLOAD MONTHLY CSV REPORT
+// ==========================================
+
+function downloadMonthlyReport() {
+    const selectedMonth = reportMonth.value;
+
+    if (!selectedMonth) {
+        alert("Please select a month.");
+        return;
+    }
+
+    const monthlyTransactions = transactions.filter(item =>
+        item.date.startsWith(selectedMonth)
+    );
+
+    if (monthlyTransactions.length === 0) {
+        alert("No transactions available for this month.");
+        return;
+    }
+
+    const rows = [
+        ["Expense Tracker Monthly Report"],
+        ["Month", selectedMonth],
+        [],
+        ["Name", "Category", "Type", "Date", "Amount", "Currency"]
+    ];
+
+    monthlyTransactions.forEach(item => {
+        rows.push([
+            item.title,
+            item.category,
+            item.type,
+            item.date,
+            Number(item.amount).toFixed(2),
+            currencySelect.value
+        ]);
+    });
+
+    const csvContent = rows.map(row =>
+        row.map(value => {
+            const safeValue = String(value ?? "")
+                .replace(/"/g, '""');
+
+            return `"${safeValue}"`;
+        }).join(",")
+    ).join("\r\n");
+
+    const blob = new Blob(
+        ["\uFEFF" + csvContent],
+        { type: "text/csv;charset=utf-8;" }
+    );
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download = `Expense-Report-${selectedMonth}.csv`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    URL.revokeObjectURL(url);
+}
+
+// ==========================================
+// REPORT EVENT LISTENERS
+// ==========================================
+
+reportMonth.addEventListener("change", updateMonthlyReport);
+
+document.getElementById("downloadReport")
+    .addEventListener("click", downloadMonthlyReport);
+
+// Refresh reports whenever dashboard data changes.
+const originalUpdateDashboard = updateDashboard;
+
+updateDashboard = function () {
+    originalUpdateDashboard();
+    updateMonthlyReport();
+};
+
+// Initial report display
+updateMonthlyReport();
