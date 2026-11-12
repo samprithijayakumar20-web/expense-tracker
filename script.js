@@ -1,396 +1,474 @@
 
-// =====================================
+// ==========================================
 // LAVENDER WALLET - EXPENSE TRACKER
-// =====================================
+// ==========================================
 
-// 1. SELECT HTML ELEMENTS
+const STORAGE_KEY = "lavenderWalletTransactionsV2";
+const CURRENCY_KEY = "lavenderWalletCurrencyV2";
 
-const transactionForm = document.getElementById("transactionForm");
+let transactions = [];
+let editingId = null;
 
-const transactionName = document.getElementById("transactionName");
-const transactionAmount = document.getElementById("transactionAmount");
-const transactionType = document.getElementById("transactionType");
-const transactionCategory = document.getElementById("transactionCategory");
-const transactionDate = document.getElementById("transactionDate");
+// Get HTML elements
+const form = document.getElementById("transactionForm");
+const titleInput = document.getElementById("title");
+const amountInput = document.getElementById("amount");
+const typeInput = document.getElementById("type");
+const categoryInput = document.getElementById("category");
+const dateInput = document.getElementById("date");
+
+const currencySelect = document.getElementById("currency");
+const balanceElement = document.getElementById("balance");
+const incomeElement = document.getElementById("income");
+const expenseElement = document.getElementById("expense");
 
 const transactionList = document.getElementById("transactionList");
-const emptyMessage = document.getElementById("emptyMessage");
-
-const totalBalance = document.getElementById("totalBalance");
-const totalIncome = document.getElementById("totalIncome");
-const totalExpense = document.getElementById("totalExpense");
-
-const currencySearch = document.getElementById("currencySearch");
-const currencyOptions = document.getElementById("currencyOptions");
-
+const searchInput = document.getElementById("search");
 const filterType = document.getElementById("filterType");
-const todayDate = document.getElementById("todayDate");
-const toast = document.getElementById("toast");
-
-
-// 2. WORLD CURRENCY LIST
-
-const currencyCodes = `
-AED AFN ALL AMD ANG AOA ARS AUD AWG AZN
-BAM BBD BDT BGN BHD BIF BMD BND BOB BRL
-BSD BTN BWP BYN BZD CAD CDF CHF CLP CNY
-COP CRC CUP CVE CZK DJF DKK DOP DZD EGP
-ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD
-GNF GTQ GYD HKD HNL HTG HUF IDR ILS INR
-IQD IRR ISK JMD JOD JPY KES KGS KHR KMF
-KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL
-LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR
-MVR MWK MXN MYR MZN NAD NGN NIO NOK NPR
-NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR
-RON RSD RUB RWF SAR SBD SCR SDG SEK SGD
-SHP SLE SOS SRD SSP STN SVC SYP SZL THB
-TJS TMT TND TOP TRY TTD TWD TZS UAH UGX
-USD UYU UZS VES VND VUV WST XAF XCD XOF
-XPF YER ZAR ZMW ZWG
-`.trim().split(/\s+/);
-
-const currencyNames = new Intl.DisplayNames(
-    ["en"],
-    { type: "currency" }
-);
-
-const supportedCurrencies = new Set(currencyCodes);
-
-function getCurrencyName(code) {
-    try {
-        return currencyNames.of(code) || code;
-    } catch {
-        return code;
-    }
-}
-
-// Add currencies to the searchable dropdown
-
-currencyCodes.forEach(code => {
-    const option = document.createElement("option");
-
-    option.value = `${code} — ${getCurrencyName(code)}`;
-
-    currencyOptions.appendChild(option);
-});
-
-
-// 3. LOAD SAVED SETTINGS AND TRANSACTIONS
-
-function loadTransactions() {
-    try {
-        const saved = JSON.parse(
-            localStorage.getItem("lavenderTransactions")
-        );
-
-        return Array.isArray(saved) ? saved : [];
-    } catch {
-        return [];
-    }
-}
-
-let transactions = loadTransactions();
-
-let selectedCurrency =
-    localStorage.getItem("lavenderCurrency") || "INR";
-
-if (!supportedCurrencies.has(selectedCurrency)) {
-    selectedCurrency = "INR";
-}
-
-currencySearch.value =
-    `${selectedCurrency} — ${getCurrencyName(selectedCurrency)}`;
-
-
-// 4. SAVE DATA IN BROWSER
-
-function saveTransactions() {
-    localStorage.setItem(
-        "lavenderTransactions",
-        JSON.stringify(transactions)
-    );
-}
-
-
-// 5. CURRENCY FORMATTER
-
-function formatMoney(amount) {
-    try {
-        return new Intl.NumberFormat("en", {
-            style: "currency",
-            currency: selectedCurrency
-        }).format(amount);
-    } catch {
-        return `${selectedCurrency} ${amount.toFixed(2)}`;
-    }
-}
-
-
-// 6. SELECT A DIFFERENT CURRENCY
-
-currencySearch.addEventListener("change", function () {
-
-    const enteredValue = currencySearch.value.trim();
-
-    const code = enteredValue
-        .split("—")[0]
-        .trim()
-        .toUpperCase();
-
-    if (!supportedCurrencies.has(code)) {
-        showToast("Please select a valid currency.");
-        currencySearch.value =
-            `${selectedCurrency} — ${getCurrencyName(selectedCurrency)}`;
-        return;
-    }
-
-    selectedCurrency = code;
-
-    localStorage.setItem(
-        "lavenderCurrency",
-        selectedCurrency
-    );
-
-    currencySearch.value =
-        `${selectedCurrency} — ${getCurrencyName(selectedCurrency)}`;
-
-    renderDashboard();
-
-    showToast("Currency updated successfully!");
-});
-
-
-// 7. ADD TRANSACTION
-
-transactionForm.addEventListener("submit", function (event) {
-
-    event.preventDefault();
-
-    const name = transactionName.value.trim();
-    const amount = Number(transactionAmount.value);
-    const type = transactionType.value;
-    const category = transactionCategory.value;
-    const date = transactionDate.value;
-
-    if (!name || !Number.isFinite(amount) || amount <= 0 || !date) {
-        showToast("Please enter valid transaction details.");
-        return;
-    }
-
-    const newTransaction = {
-        id: window.crypto?.randomUUID
-            ? window.crypto.randomUUID()
-            : String(Date.now()),
-
-        name: name,
-        amount: amount,
-        type: type,
-        category: category,
-        date: date
-    };
-
-    transactions.push(newTransaction);
-
-    saveTransactions();
-
-    renderDashboard();
-
-    transactionForm.reset();
-
-    // Set today's date again after resetting the form
-    transactionDate.value = getTodayString();
-
-    showToast("Transaction added successfully!");
-});
-
-
-// 8. CALCULATE INCOME, EXPENSE AND BALANCE
-
-function updateSummary() {
-
-    let income = 0;
-    let expense = 0;
-
-    transactions.forEach(transaction => {
-
-        if (transaction.type === "income") {
-            income += transaction.amount;
-        } else {
-            expense += transaction.amount;
-        }
-
-    });
-
-    const balance = income - expense;
-
-    totalBalance.textContent = formatMoney(balance);
-    totalIncome.textContent = formatMoney(income);
-    totalExpense.textContent = formatMoney(expense);
-}
-
-
-// 9. DISPLAY TRANSACTIONS
-
-function escapeHTML(value) {
-    return String(value).replace(/[&<>"']/g, character => ({
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;"
-    })[character]);
-}
-
-function renderTransactions() {
-
-    transactionList.innerHTML = "";
-
-    const filter = filterType.value;
-
-    const filteredTransactions = transactions
-        .filter(transaction => {
-            return filter === "all" || transaction.type === filter;
-        })
-        .sort((a, b) => {
-            return b.date.localeCompare(a.date);
-        });
-
-    emptyMessage.style.display =
-        filteredTransactions.length === 0 ? "block" : "none";
-
-    filteredTransactions.forEach(transaction => {
-
-        const row = document.createElement("tr");
-
-        const amountClass =
-            transaction.type === "income"
-                ? "amount-income"
-                : "amount-expense";
-
-        const sign =
-            transaction.type === "income" ? "+" : "−";
-
-        row.innerHTML = `
-            <td>${escapeHTML(transaction.name)}</td>
-
-            <td>
-                <span class="type-tag">
-                    ${escapeHTML(transaction.category)}
-                </span>
-            </td>
-
-            <td>${escapeHTML(transaction.date)}</td>
-
-            <td class="${amountClass}">
-                ${sign}${escapeHTML(formatMoney(transaction.amount))}
-            </td>
-
-            <td>
-                <button
-                    class="delete-button"
-                    data-id="${escapeHTML(transaction.id)}"
-                    type="button"
-                    aria-label="Delete ${escapeHTML(transaction.name)}"
-                >
-                    Delete
-                </button>
-            </td>
-        `;
-
-        transactionList.appendChild(row);
-
-    });
-}
-
-
-// 10. DELETE TRANSACTION
-
-transactionList.addEventListener("click", function (event) {
-
-    const button = event.target.closest(".delete-button");
-
-    if (!button) return;
-
-    const transactionId = button.dataset.id;
-
-    transactions = transactions.filter(transaction => {
-        return String(transaction.id) !== transactionId;
-    });
-
-    saveTransactions();
-
-    renderDashboard();
-
-    showToast("Transaction deleted.");
-});
-
-
-// 11. FILTER TRANSACTIONS
-
-filterType.addEventListener("change", function () {
-    renderTransactions();
-});
-
-
-// 12. UPDATE THE WHOLE DASHBOARD
-
-function renderDashboard() {
-    updateSummary();
-    renderTransactions();
-}
-
-
-// 13. GET TODAY'S DATE
-
-function getTodayString() {
-
-    const today = new Date();
-
-    const year = today.getFullYear();
-
-    const month = String(
-        today.getMonth() + 1
-    ).padStart(2, "0");
-
-    const day = String(
-        today.getDate()
-    ).padStart(2, "0");
+const filterCategory = document.getElementById("filterCategory");
+const filterMonth = document.getElementById("filterMonth");
+
+const chartMonth = document.getElementById("chartMonth");
+const monthlyChart = document.getElementById("monthlyChart");
+const chartTotal = document.getElementById("chartTotal");
+
+const submitBtn = document.getElementById("submitBtn");
+const cancelEditBtn = document.getElementById("cancelEdit");
+
+// ==========================================
+// INITIALIZATION
+// ==========================================
+
+function getLocalDateString(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
 
     return `${year}-${month}-${day}`;
 }
 
-transactionDate.value = getTodayString();
+function getCurrentMonth() {
+    return getLocalDateString().slice(0, 7);
+}
 
-todayDate.textContent = new Date().toLocaleDateString(
-    "en-IN",
-    {
-        day: "numeric",
-        month: "long",
-        year: "numeric"
+function initializeApp() {
+    try {
+        const savedTransactions = JSON.parse(
+            localStorage.getItem(STORAGE_KEY)
+        );
+
+        transactions = Array.isArray(savedTransactions)
+            ? savedTransactions
+            : [];
+    } catch (error) {
+        transactions = [];
+    }
+
+    const savedCurrency = localStorage.getItem(CURRENCY_KEY);
+
+    if (savedCurrency && currencySelect.querySelector(
+        `option[value="${savedCurrency}"]`
+    )) {
+        currencySelect.value = savedCurrency;
+    }
+
+    dateInput.value = getLocalDateString();
+    chartMonth.value = getCurrentMonth();
+
+    document.getElementById("todayDate").textContent =
+        new Date().toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "long",
+            year: "numeric"
+        });
+
+    updateDashboard();
+}
+
+// ==========================================
+// LOCAL STORAGE
+// ==========================================
+
+function saveTransactions() {
+    localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(transactions)
+    );
+}
+
+// ==========================================
+// CURRENCY FORMATTER
+// ==========================================
+
+function formatMoney(amount) {
+    const currency = currencySelect.value;
+
+    try {
+        return new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency: currency,
+            maximumFractionDigits: 2
+        }).format(amount);
+    } catch (error) {
+        return `${currency} ${Number(amount).toFixed(2)}`;
+    }
+}
+
+// ==========================================
+// ADD AND EDIT TRANSACTIONS
+// ==========================================
+
+form.addEventListener("submit", function (event) {
+    event.preventDefault();
+
+    const title = titleInput.value.trim();
+    const amount = Number(amountInput.value);
+    const type = typeInput.value;
+    const category = categoryInput.value;
+    const date = dateInput.value;
+
+    if (!title || !Number.isFinite(amount) || amount <= 0 || !date) {
+        alert("Please enter valid transaction details.");
+        return;
+    }
+
+    if (editingId !== null) {
+        const existingTransaction = transactions.find(
+            item => item.id === editingId
+        );
+
+        if (existingTransaction) {
+            existingTransaction.title = title;
+            existingTransaction.amount = amount;
+            existingTransaction.type = type;
+            existingTransaction.category = category;
+            existingTransaction.date = date;
+        }
+
+        editingId = null;
+        resetForm();
+    } else {
+        const newTransaction = {
+            id: Date.now().toString() + Math.random().toString(36).slice(2),
+            title,
+            amount,
+            type,
+            category,
+            date
+        };
+
+        transactions.push(newTransaction);
+    }
+
+    saveTransactions();
+    updateDashboard();
+    form.reset();
+
+    dateInput.value = getLocalDateString();
+    submitBtn.textContent = "+ Add Transaction";
+    cancelEditBtn.classList.add("hidden");
+    document.getElementById("formTitle").textContent = "Add Transaction";
+});
+
+// ==========================================
+// RESET FORM
+// ==========================================
+
+function resetForm() {
+    editingId = null;
+    form.reset();
+
+    dateInput.value = getLocalDateString();
+    submitBtn.textContent = "+ Add Transaction";
+    cancelEditBtn.classList.add("hidden");
+    document.getElementById("formTitle").textContent = "Add Transaction";
+}
+
+cancelEditBtn.addEventListener("click", resetForm);
+
+// ==========================================
+// EDIT AND DELETE TRANSACTIONS
+// ==========================================
+
+transactionList.addEventListener("click", function (event) {
+    const editButton = event.target.closest(".edit-btn");
+    const deleteButton = event.target.closest(".delete-btn");
+
+    if (editButton) {
+        editTransaction(editButton.dataset.id);
+    }
+
+    if (deleteButton) {
+        deleteTransaction(deleteButton.dataset.id);
+    }
+});
+
+function editTransaction(id) {
+    const transaction = transactions.find(
+        item => item.id === id
+    );
+
+    if (!transaction) return;
+
+    editingId = id;
+
+    titleInput.value = transaction.title;
+    amountInput.value = transaction.amount;
+    typeInput.value = transaction.type;
+    categoryInput.value = transaction.category;
+    dateInput.value = transaction.date;
+
+    submitBtn.textContent = "Update Transaction";
+    cancelEditBtn.classList.remove("hidden");
+    document.getElementById("formTitle").textContent = "Edit Transaction";
+
+    form.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+    });
+}
+
+function deleteTransaction(id) {
+    const confirmed = confirm(
+        "Are you sure you want to delete this transaction?"
+    );
+
+    if (!confirmed) return;
+
+    transactions = transactions.filter(
+        item => item.id !== id
+    );
+
+    if (editingId === id) {
+        resetForm();
+    }
+
+    saveTransactions();
+    updateDashboard();
+}
+
+// ==========================================
+// DASHBOARD CALCULATIONS
+// ==========================================
+
+function updateDashboard() {
+    let totalIncome = 0;
+    let totalExpense = 0;
+
+    transactions.forEach(transaction => {
+        if (transaction.type === "income") {
+            totalIncome += Number(transaction.amount);
+        } else {
+            totalExpense += Number(transaction.amount);
+        }
+    });
+
+    balanceElement.textContent = formatMoney(
+        totalIncome - totalExpense
+    );
+
+    incomeElement.textContent = formatMoney(totalIncome);
+    expenseElement.textContent = formatMoney(totalExpense);
+
+    displayTransactions();
+    createMonthlyChart();
+}
+
+// ==========================================
+// SAFE HTML TEXT
+// ==========================================
+
+function escapeHTML(value) {
+    return String(value).replace(/[&<>"']/g, function (character) {
+        const replacements = {
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#039;"
+        };
+
+        return replacements[character];
+    });
+}
+
+// ==========================================
+// TRANSACTION HISTORY
+// ==========================================
+
+function displayTransactions() {
+    const searchText = searchInput.value.toLowerCase().trim();
+    const selectedType = filterType.value;
+    const selectedCategory = filterCategory.value;
+    const selectedMonth = filterMonth.value;
+
+    const filteredTransactions = transactions
+        .filter(transaction => {
+            const matchesSearch =
+                transaction.title.toLowerCase().includes(searchText);
+
+            const matchesType =
+                selectedType === "all" ||
+                transaction.type === selectedType;
+
+            const matchesCategory =
+                selectedCategory === "all" ||
+                transaction.category === selectedCategory;
+
+            const matchesMonth =
+                !selectedMonth ||
+                transaction.date.startsWith(selectedMonth);
+
+            return matchesSearch &&
+                matchesType &&
+                matchesCategory &&
+                matchesMonth;
+        })
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+    if (filteredTransactions.length === 0) {
+        transactionList.innerHTML = `
+            <tr>
+                <td colspan="6" class="empty-message">
+                    No matching transactions found.
+                </td>
+            </tr>
+        `;
+    } else {
+        transactionList.innerHTML = filteredTransactions.map(item => {
+            const isIncome = item.type === "income";
+
+            return `
+                <tr>
+                    <td>${escapeHTML(item.title)}</td>
+                    <td>${escapeHTML(item.category)}</td>
+                    <td>${escapeHTML(item.date)}</td>
+                    <td>${isIncome ? "Income" : "Expense"}</td>
+                    <td class="${isIncome ? "income-text" : "expense-text"}">
+                        ${isIncome ? "+" : "-"}${formatMoney(Number(item.amount))}
+                    </td>
+                    <td>
+                        <div class="action-buttons">
+                            <button class="edit-btn"
+                                data-id="${escapeHTML(item.id)}">
+                                Edit
+                            </button>
+
+                            <button class="delete-btn"
+                                data-id="${escapeHTML(item.id)}">
+                                Delete
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join("");
+    }
+
+    let filteredTotal = 0;
+
+    filteredTransactions.forEach(item => {
+        if (item.type === "income") {
+            filteredTotal += Number(item.amount);
+        } else {
+            filteredTotal -= Number(item.amount);
+        }
+    });
+
+    document.getElementById("transactionCount").textContent =
+        filteredTransactions.length;
+
+    document.getElementById("filteredTotal").textContent =
+        formatMoney(filteredTotal);
+}
+
+// ==========================================
+// MONTHLY EXPENSE CHART
+// ==========================================
+
+function createMonthlyChart() {
+    const selectedMonth = chartMonth.value || getCurrentMonth();
+
+    const monthlyTransactions = transactions.filter(item =>
+        item.type === "expense" &&
+        item.date.startsWith(selectedMonth)
+    );
+
+    const weeklyExpenses = [0, 0, 0, 0, 0];
+
+    monthlyTransactions.forEach(item => {
+        const day = Number(item.date.slice(8, 10));
+        const weekIndex = Math.min(Math.floor((day - 1) / 7), 4);
+
+        weeklyExpenses[weekIndex] += Number(item.amount);
+    });
+
+    const total = weeklyExpenses.reduce(
+        (sum, value) => sum + value,
+        0
+    );
+
+    chartTotal.textContent = formatMoney(total);
+
+    const highestExpense = Math.max(...weeklyExpenses, 1);
+
+    monthlyChart.innerHTML = weeklyExpenses.map((amount, index) => {
+        const percentage = amount === 0
+            ? 0
+            : Math.max((amount / highestExpense) * 100, 4);
+
+        return `
+            <div class="chart-column">
+                <span class="bar-value">
+                    ${amount > 0 ? escapeHTML(formatMoney(amount)) : ""}
+                </span>
+
+                <div class="bar-track">
+                    <div class="bar" style="height: ${percentage}%"
+                         title="${escapeHTML(formatMoney(amount))}">
+                    </div>
+                </div>
+
+                <span class="bar-label">Week ${index + 1}</span>
+            </div>
+        `;
+    }).join("");
+}
+
+// ==========================================
+// FILTER EVENTS
+// ==========================================
+
+searchInput.addEventListener("input", displayTransactions);
+filterType.addEventListener("change", displayTransactions);
+filterCategory.addEventListener("change", displayTransactions);
+filterMonth.addEventListener("change", displayTransactions);
+
+chartMonth.addEventListener("change", createMonthlyChart);
+
+document.getElementById("clearFilters").addEventListener(
+    "click",
+    function () {
+        searchInput.value = "";
+        filterType.value = "all";
+        filterCategory.value = "all";
+        filterMonth.value = "";
+
+        displayTransactions();
     }
 );
 
+// ==========================================
+// CURRENCY SELECTION
+// ==========================================
 
-// 14. SHOW NOTIFICATION
+currencySelect.addEventListener("change", function () {
+    localStorage.setItem(CURRENCY_KEY, currencySelect.value);
+    updateDashboard();
+});
 
-let toastTimer;
+// ==========================================
+// START APP ONLY ONCE
+// ==========================================
 
-function showToast(message) {
-
-    toast.textContent = message;
-
-    toast.classList.add("show");
-
-    clearTimeout(toastTimer);
-
-    toastTimer = setTimeout(function () {
-        toast.classList.remove("show");
-    }, 2500);
-}
-
-
-// 15. START THE WEBSITE
-
-renderDashboard();
-
-console.log("Lavender Wallet is ready!");
+initializeApp();
